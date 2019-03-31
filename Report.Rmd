@@ -1,0 +1,178 @@
+---
+title: "NBA Free Throw Analysis"
+author: "Kieran Meteyard"
+date: "March 2019"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r echo=FALSE, results = 'hide', message=FALSE}
+library(tidyverse)
+library(nbafreethrows)
+freethrows <- nbafreethrows::nbafreethrows
+```
+
+
+## Objective ## 
+This paper provides a strategic analysis of the use of free throws in basketball. Through detailed analysis of a large NBA dataset it provides insights into how teams can use the free throw to improve performance.
+
+## Executive Summary ##
+* Free throws grow in importance as games develop with increased incidence at the later stages of games. Playoff games see more free throws than games in the regular season.
+
+* Players show considerable variation in their ability to make free throws. Targeting the correct opponent and ensuring your team contains its best shooters at key moments could lead to a significant advantage. 
+
+* There is little overall evidence for high pressure situations leading to variations in performance across all players. However, on a player-by-player basis there is considerable variation. 
+
+## Background ##
+### The NBA ###
+All this paper's analysis is derived from historical data from the National Basketball Association (NBA). The NBA is a men's professional basketball league and is widely considered to be the sport's premier competition. 
+
+### What is a free throw ###
+A free throw is an unopposed opportunity for a player to score a point in a basketball game, generally awarded after a foul by the opposing team. A comprehensive overview can be found at several sources amongst them the following:
+
+- [Wikipedia](https://en.wikipedia.org/wiki/Free_throw)
+- [NBA](https://official.nba.com/rule-no-9-free-throws-and-penalties/)
+
+Free throws should be one of the easiest ways for teams to score points. However, there can be an advantage in giving an opposing team a set of free throws. This automatically stops and clock and will ensure the return of possession after the free throws are completed. 
+
+### Overview of the data ###
+The original data provided consists of free throws during 10 NBA seasons between 2006-2016. It covers almost 1100 players and over 600k free throw attempts. A representation is presented below:
+
+```{r, fig.align='center', echo=FALSE}
+library(knitr)
+kable(head(freethrows))
+```
+
+While the original data was presented in a clean format an extensive consistency check was run to ensure no inconsistent data entries. This procedure is documented in the accompanying Clean.R file. 
+
+## When do free throws happen ##
+The average number of free throws per game per season is presented in the figure below. 
+
+```{r, fig.align='center', echo=FALSE}
+freethrows %>%
+  group_by(game_id, playoffs, season) %>% 
+  summarise(n_throws = n()) %>% 
+  ungroup() %>% 
+  select(season, playoffs, n_throws) %>% 
+  group_by(season, playoffs) %>%
+  summarise(average = mean(n_throws)) %>% 
+  ggplot(aes(x = as.factor(season), y = average, col = playoffs, group = playoffs)) +
+  geom_point() +
+  geom_line() +
+  ggtitle("Average number of free throws per game per season (regular vs playoffs)") +
+  xlab("Seasons") +
+  ylab("Average Number of Free Throws") +
+  theme(axis.text.x  = element_text(angle=90, vjust=0.5))
+  
+```
+
+The average number of free throws per game has fallen with higher values seen in the earlier seasons in the dataset. Playoff games broadly see more free throws per game than regular season games. We can be more granular in our investigation of when free throws occur. 
+
+NBA games are split into 4 quarters of 12 minutes each. If scores are tied at the end of the fourth quarter teams will then play overtime in 5-minute periods. NBA seasons are split into the regular season and the playoffs. The playoffs being a knockout competition between those teams which performed best in the regular season of that year.  
+
+To include games which go to overtime, presented below is the average number of free throws per minute per period to allow for the smaller overtime periods. This graph only includes the first period of extra time as 6th periods or later were considerably rare occurrences.
+
+```{r, fig.align='center', echo=FALSE}
+freethrows %>%
+  filter(period <= 5) %>%
+  mutate(minutes = case_when(period <= 4 ~ 12, period > 4 ~ 5)) %>%
+  group_by(game_id, playoffs, period) %>% 
+  summarise(n_throws = n()) %>% 
+  ungroup() %>% 
+  select(period, playoffs, n_throws) %>% 
+  group_by(period, playoffs) %>%
+  summarise(average = mean(n_throws)) %>%
+  mutate(minutes = case_when(period <= 4 ~ 12, period > 4 ~ 5), average = average/minutes) %>%
+  select(period, playoffs, average) %>%
+  ggplot(aes(x = as.factor(period), y = average, col = playoffs, group = playoffs)) +
+  geom_point() +
+  geom_line() +
+  ggtitle("Average number of free throws per minute per period (regular vs playoffs)") +
+  xlab("Periods") +
+  ylab("Average Number of Throws per Minute")
+```
+
+The plot demonstrates that free throws are more prevalent later in games and more prevalent in playoff games than during the regular season. The reasons for this are likely a mix of tiredness, regulations around fouls and team behaviour in the later stages of games. It would suggest a team should aim to ensure its best free throwers are on the field late into the game.
+
+## Player variation ##
+There is a wide variation in how players perform at the free throw. This histogram shows the distribution of successful free throw percentage for all players who have attempted at least 50 throws. 
+
+```{r, fig.align='center', message=FALSE, echo=FALSE}
+freethrows %>%
+  group_by(player) %>%
+  summarise(throws = n(), made = sum(shot_made), missed = (throws - made), percentage = sum(shot_made)/n()) %>%
+  filter(throws >= 50) %>%
+  select(player, percentage) %>%
+  ggplot(aes(x=percentage)) + geom_histogram(color = "black", fill="white") + 
+  ggtitle("Histogram of free throw percentage") +
+  xlab("Percentage of successful free throws")
+```
+
+This is a left skewed distribution with the bulk of players successfully shooting 70-80% of their free throws. An elite group have an average above 90% while there are also players with percentages around 50% and under. Knowing your opponents can help to inform strategic choices as to the risk associated with fouling certain players. 
+
+We have created an interactive tool [(hosted here)](https://kmeteyard.shinyapps.io/Freethrows/) which gives free throw performance information on each of the players in our data set and includes their performance per season. Bespoke tools of this nature can be customised for any specific team or league to help provide data-driven strategic advantage. 
+
+##The impact of pressure##
+How pressure impact a player's performance can also help teams strategically use the free throw. A free throw made when scores are tight and late in a game is surely more impactful than one made when a team is comfortably in the lead or out of contention. As a simple measure of pressure, we have considered free throws taken in the fourth period or overtime where the teams' scores are within 5 points of each other. The boxplot below compares throws taken in no pressure situations against those we have defined as high pressure situations. 
+
+```{r, fig.align='center', echo=FALSE}
+freethrows$scorediff <- abs(as.numeric(word(freethrows$score, 3, 3)) - as.numeric(word(freethrows$score, 1, 1)))
+freethrows$pressure <- ifelse(((freethrows$period >= 4) & (freethrows$scorediff <=5)), 1, 0)
+freethrows$pressure = factor(freethrows$pressure,labels=c("Low","High"))
+
+freethrows %>%
+  group_by(player, pressure) %>%
+  summarise(throws = n(), made = sum(shot_made), missed = (throws - made), percentage = sum(shot_made)/n()) %>%
+  filter(throws >= 100) %>%
+  select(player, percentage, pressure) %>%
+  ggplot(aes(x=pressure, y=percentage)) + 
+  geom_boxplot() +
+  ggtitle("Boxplot of free throw percentage in high and low pressure situations") +
+  xlab("Pressure rating") +
+  ylab("Free throw percentage")
+```
+
+There is a small increase in median free throw percentage for players under high pressure conditions. The range of the data for high pressure throws is also smaller when compared to regular free throws. Admittedly, the sample size of high pressure throws is a lot smaller than for throws in normal conditions. 
+
+While there seems to be a small improvement in average performance for players in high pressure situations, it would be useful to understand on a player by player basis whether high pressure situations have a positive or negative effect.
+
+The below scatter plot charts players' performance in normal situations against their performance in high pressure situations. Points above the reference line show players who outperform in high pressure situations while those below the reference line show those who perform worse under pressure.
+
+```{r, fig.align='center', echo=FALSE}
+freethrows %>%
+  group_by(player, pressure) %>%
+  summarise(throws = n(), made = sum(shot_made), missed = (throws - made), percentage = sum(shot_made)/n()) %>%
+  filter(throws >= 100) %>%
+  select(player, percentage, pressure) %>%
+  spread(pressure, percentage) %>%
+  drop_na() %>%
+  ggplot(aes(x=Low, y=High)) + 
+  geom_point() + geom_abline(intercept = 0, slope=1) +
+  ggtitle("Scatterplot of players' free throw percentage: low pressure vs high pressure") +
+  xlab("Free throw percentage in low pressure situations") +
+  ylab("Free throw percentage in high pressure situations")
+```
+
+This graph again suggests for certain players the impact of high pressure situations can be significant and that a canny team could profit from fully understanding its own players and those of its opponents. 
+
+##Summary##
+In summary, free throws are an opportunity for teams to eke out additional advantage by focusing on
+
+- When free throws occur
+- Their players and their opponents
+- How pressure can impact free throw performance
+
+##Next steps##
+This initial analysis has suggested several key areas teams can focus on to improve performance at the free throw. To continue this work, we suggest some further actions to consider:
+
+* A deep-dive analysis of your team and your league to ensure these conclusions hold for your exact circumstances. 
+* The commission of tailored analytical products for your team and league. Our shiny-based player dashboard can be programmed for your circumstances and provide live data on your team and opponents. 
+* The inclusion of further data to inform more advanced analytics. An example web scraping procedure is provided (webscrape.R) to evidence the additional player data that can easily be sourced. 
+
