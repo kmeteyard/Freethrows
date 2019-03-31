@@ -2,7 +2,7 @@
 
 An analysis of free throws in basketball. 
 
-#Contains
+## Contains
 - free_throws.csv. The original data file
 - cleanfreethrows.Rdata. The cleaned data
 - Clean.R. The cleaning script
